@@ -43,6 +43,9 @@
 // The current QuicktypeBar mode (hidden, collapsed or expanded)
 @property (nonatomic) SLKQuicktypeBarMode quicktypeBarMode;
 
+// TODO NEEDS DESCRIPTION
+@property (nonatomic, weak) UIView *keyboardView;
+
 @end
 
 @implementation SLKTextViewController
@@ -755,6 +758,17 @@
     // After showing keyboard, check if the current cursor position could diplay autocompletion
     if (show) {
         [self processTextForAutoCompletion];
+        
+        self.keyboardView = self.textView.inputAccessoryView.superview;
+        
+        [self.tableView.panGestureRecognizer addTarget:self action:@selector(handlePanGestureRecognizer:)];
+    } else {
+        self.keyboardView.hidden = NO;
+        self.keyboardView.userInteractionEnabled = YES;
+        
+        self.keyboardView = nil;
+        
+        [self.tableView.panGestureRecognizer removeTarget:self action:NULL];
     }
 }
 
@@ -1237,6 +1251,114 @@
     return YES;
 }
 
+#pragma mark - Keyboard
+
+- (void)setKeyboardView:(UIView *)keyboardView
+{
+    if (_keyboardView)
+        [self unregisterKeyboardFrameObserver];
+    
+    _keyboardView = keyboardView;
+    
+    if (_keyboardView)
+        [self registerKeyboardFrameObserver];
+}
+
+- (void)registerKeyboardFrameObserver
+{
+    [self.keyboardView addObserver:self forKeyPath:NSStringFromSelector(@selector(frame)) options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew) context:NULL];
+}
+
+- (void)unregisterKeyboardFrameObserver
+{
+    @try {
+        [self.keyboardView removeObserver:self forKeyPath:NSStringFromSelector(@selector(frame))];
+    }
+    @catch (NSException * __unused exception) {}
+}
+
+#pragma mark - KVO
+
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
+{
+    if ([object isEqual:self.keyboardView] && [keyPath isEqualToString:NSStringFromSelector(@selector(frame))]) {
+        NSDictionary *userInfo = @{UIKeyboardFrameEndUserInfoKey:[NSValue valueWithCGRect:[object frame]]};
+        [[NSNotificationCenter defaultCenter] postNotificationName:SCKInputAccessoryViewKeyboardFrameDidChangeNotification object:nil userInfo:userInfo];
+    }
+}
+
+#pragma mark - UIPanGestureRecognizer
+
+- (void)handlePanGestureRecognizer:(UIPanGestureRecognizer *)pan
+{
+    UIWindow *window = [[UIApplication sharedApplication] keyWindow];
+    UIView *view = window.rootViewController.view;
+    CGPoint touch = [pan locationInView:view];
+    
+    CGFloat triggerOffsetY = CGRectGetHeight(self.textInputbar.frame);
+    
+    CGFloat contextViewWindowHeight = CGRectGetHeight(window.frame);
+    
+    CGFloat keyboardViewHeight = CGRectGetHeight(self.keyboardView.frame);
+    
+    CGFloat dragThresholdY = (contextViewWindowHeight - keyboardViewHeight - triggerOffsetY);
+    
+    CGRect newKeyboardViewFrame = self.keyboardView.frame;
+    
+    BOOL userIsDraggingNearThresholdForDismissing = (touch.y > dragThresholdY);
+    
+    self.keyboardView.userInteractionEnabled = !userIsDraggingNearThresholdForDismissing;
+    
+    switch (pan.state) {
+        case UIGestureRecognizerStateChanged:
+        {
+            newKeyboardViewFrame.origin.y = touch.y + triggerOffsetY;
+            
+            newKeyboardViewFrame.origin.y = MIN(newKeyboardViewFrame.origin.y, contextViewWindowHeight);
+            newKeyboardViewFrame.origin.y = MAX(newKeyboardViewFrame.origin.y, contextViewWindowHeight - keyboardViewHeight);
+            
+            if (CGRectGetMinY(newKeyboardViewFrame) == CGRectGetMinY(self.keyboardView.frame))
+                return;
+            
+            [UIView animateWithDuration:0.0f delay:0.0f options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionTransitionNone animations:^{
+                self.keyboardView.frame = newKeyboardViewFrame;
+            } completion:nil];
+        }
+            break;
+            
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+        {
+            if (CGRectGetMinY(self.keyboardView.frame) > contextViewWindowHeight)
+                return;
+            
+            CGPoint velocity = [pan velocityInView:view];
+            BOOL userIsScrollingDown = (velocity.y > 0.0f);
+            BOOL shouldHide = (userIsScrollingDown && userIsDraggingNearThresholdForDismissing);
+            
+            newKeyboardViewFrame.origin.y = contextViewWindowHeight;
+            if (!shouldHide)
+                newKeyboardViewFrame.origin.y -= keyboardViewHeight;
+            
+            [UIView animateWithDuration:0.25f delay:0.0f options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationCurveEaseOut animations:^{
+                self.keyboardView.frame = newKeyboardViewFrame;
+            } completion:^(BOOL finished) {
+                self.keyboardView.userInteractionEnabled = !shouldHide;
+                
+                if (shouldHide) {
+                    self.keyboardView.hidden = YES;
+                    [self unregisterKeyboardFrameObserver];
+                    [self dismissKeyboard:NO];
+                }
+            }];
+        }
+            break;
+            
+        default:
+            break;
+    }
+}
 
 #pragma mark - View lifeterm
 
