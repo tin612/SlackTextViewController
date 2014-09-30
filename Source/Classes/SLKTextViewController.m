@@ -759,7 +759,7 @@
     if (show) {
         [self processTextForAutoCompletion];
         
-        self.keyboardView = self.textView.inputAccessoryView.superview;
+        self.keyboardView = self.inputAccessoryView.superview;
         
         [self.tableView.panGestureRecognizer addTarget:self action:@selector(handlePanGestureRecognizer:)];
     } else {
@@ -781,7 +781,7 @@
     
     // Skips this if it's not the expected textView.
     // Checking the keyboard height constant helps to disable the view constraints update on iPad when the keyboard is undocked.
-    if (![self.textView isFirstResponder] || self.keyboardHC.constant == 0) {
+    if (![self.textView isFirstResponder]) {
         return;
     }
     
@@ -1264,15 +1264,29 @@
         [self registerKeyboardFrameObserver];
 }
 
+- (NSString *)keyPathForKeyboardHandling
+{
+    return NSStringFromSelector(@selector(frame));
+}
+
+- (void)hideKeyboard
+{
+    if (self.keyboardView) {
+        self.keyboardView.hidden = YES;
+        [self unregisterKeyboardFrameObserver];
+        [self dismissKeyboard:NO];
+    }
+}
+
 - (void)registerKeyboardFrameObserver
 {
-    [self.keyboardView addObserver:self forKeyPath:NSStringFromSelector(@selector(frame)) options:(NSKeyValueObservingOptionOld | NSKeyValueObservingOptionNew) context:NULL];
+    [self.keyboardView addObserver:self forKeyPath:[self keyPathForKeyboardHandling] options:0 context:NULL];
 }
 
 - (void)unregisterKeyboardFrameObserver
 {
     @try {
-        [self.keyboardView removeObserver:self forKeyPath:NSStringFromSelector(@selector(frame))];
+        [self.keyboardView removeObserver:self forKeyPath:[self keyPathForKeyboardHandling]];
     }
     @catch (NSException * __unused exception) {}
 }
@@ -1347,9 +1361,7 @@
                 self.keyboardView.userInteractionEnabled = !shouldHide;
                 
                 if (shouldHide) {
-                    self.keyboardView.hidden = YES;
-                    [self unregisterKeyboardFrameObserver];
-                    [self dismissKeyboard:NO];
+                    [self hideKeyboard];
                 }
             }];
         }
