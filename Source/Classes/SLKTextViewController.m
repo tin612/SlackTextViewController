@@ -446,6 +446,16 @@
     }
 }
 
+- (void)setKeyboardView:(UIView *)keyboardView
+{
+    if (_keyboardView)
+        [self unregisterKeyboardFrameObserver];
+    
+    _keyboardView = keyboardView;
+    
+    if (_keyboardView)
+        [self registerKeyboardFrameObserver];
+}
 
 #pragma mark - Subclassable Methods
 
@@ -1253,17 +1263,6 @@
 
 #pragma mark - Keyboard
 
-- (void)setKeyboardView:(UIView *)keyboardView
-{
-    if (_keyboardView)
-        [self unregisterKeyboardFrameObserver];
-    
-    _keyboardView = keyboardView;
-    
-    if (_keyboardView)
-        [self registerKeyboardFrameObserver];
-}
-
 - (NSString *)keyPathForKeyboardHandling
 {
     return NSStringFromSelector(@selector(frame));
@@ -1360,9 +1359,8 @@
             } completion:^(BOOL finished) {
                 self.keyboardView.userInteractionEnabled = !shouldHide;
                 
-                if (shouldHide) {
+                if (shouldHide)
                     [self hideKeyboard];
-                }
             }];
         }
             break;
@@ -1406,7 +1404,11 @@
     _autoCompletionViewHC = nil;
     _keyboardHC = nil;
     
+    _keyboardView = nil;
+    
     [self unregisterNotifications];
+    
+    [self unregisterKeyboardFrameObserver];
 }
 
 @end
