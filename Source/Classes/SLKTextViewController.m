@@ -43,7 +43,7 @@
 // The current QuicktypeBar mode (hidden, collapsed or expanded)
 @property (nonatomic) SLKQuicktypeBarMode quicktypeBarMode;
 
-// TODO NEEDS DESCRIPTION
+// The system keyboard view
 @property (nonatomic, weak) UIView *keyboardView;
 
 @end
@@ -448,11 +448,13 @@
 
 - (void)setKeyboardView:(UIView *)keyboardView
 {
+    // unregister keyboard frame observer if registered
     if (_keyboardView)
         [self unregisterKeyboardFrameObserver];
     
     _keyboardView = keyboardView;
     
+    // register keyboard frame observer
     if (_keyboardView)
         [self registerKeyboardFrameObserver];
 }
@@ -1263,11 +1265,6 @@
 
 #pragma mark - Keyboard
 
-- (NSString *)keyPathForKeyboardHandling
-{
-    return NSStringFromSelector(@selector(frame));
-}
-
 - (void)hideKeyboard
 {
     if (self.keyboardView) {
@@ -1279,13 +1276,13 @@
 
 - (void)registerKeyboardFrameObserver
 {
-    [self.keyboardView addObserver:self forKeyPath:[self keyPathForKeyboardHandling] options:0 context:NULL];
+    [self.keyboardView addObserver:self forKeyPath:NSStringFromSelector(@selector(frame)) options:0 context:NULL];
 }
 
 - (void)unregisterKeyboardFrameObserver
 {
     @try {
-        [self.keyboardView removeObserver:self forKeyPath:[self keyPathForKeyboardHandling]];
+        [self.keyboardView removeObserver:self forKeyPath:NSStringFromSelector(@selector(frame))];
     }
     @catch (NSException * __unused exception) {}
 }
@@ -1404,11 +1401,11 @@
     _autoCompletionViewHC = nil;
     _keyboardHC = nil;
     
-    _keyboardView = nil;
-    
     [self unregisterNotifications];
     
     [self unregisterKeyboardFrameObserver];
+    
+    _keyboardView = nil;
 }
 
 @end
