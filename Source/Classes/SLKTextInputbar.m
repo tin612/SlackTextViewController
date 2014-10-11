@@ -36,6 +36,7 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
 @property (nonatomic, strong) NSLayoutConstraint *accessoryViewHC;
 
 @property (nonatomic, strong) UILabel *charCountLabel;
+@property (nonatomic) BOOL newWordInserted;
 
 @end
 
@@ -45,8 +46,15 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
 
 - (id)init
 {
-    self = [super init];
-    if (self) {
+    if (self = [super init]) {
+        [self commonInit];
+    }
+    return self;
+}
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    if (self = [super initWithCoder:coder]) {
         [self commonInit];
     }
     return self;
@@ -126,6 +134,11 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
                 [gesture addTarget:self action:@selector(willShowLoupe:)];
             }
         }
+        
+        // Registers the Menu Controller for undo/redo actions
+        UIMenuItem *undo = [[UIMenuItem alloc] initWithTitle:@"Undo" action:NSSelectorFromString(@"undo:")];
+        UIMenuItem *redo = [[UIMenuItem alloc] initWithTitle:@"Redo" action:NSSelectorFromString(@"redo:")];
+        [[UIMenuController sharedMenuController] setMenuItems:@[undo,redo]];
     }
     return _textView;
 }
@@ -364,13 +377,13 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
     NSString *counter = nil;
     
     if (self.counterStyle == SLKCounterStyleNone) {
-        counter = [NSString stringWithFormat:@"%ld", text.length];
+        counter = [NSString stringWithFormat:@"%ld", (unsigned long)text.length];
     }
     if (self.counterStyle == SLKCounterStyleSplit) {
-        counter = [NSString stringWithFormat:@"%ld/%ld", text.length, self.maxCharCount];
+        counter = [NSString stringWithFormat:@"%ld/%ld", (unsigned long)text.length, (unsigned long)self.maxCharCount];
     }
     if (self.counterStyle == SLKCounterStyleCountdown) {
-        counter = [NSString stringWithFormat:@"%ld", text.length-self.maxCharCount];
+        counter = [NSString stringWithFormat:@"%lu", text.length-self.maxCharCount];
     }
     
     self.charCountLabel.text = counter;
@@ -411,6 +424,13 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
 
 - (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
 {
+    self.newWordInserted = ([text rangeOfCharacterFromSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]].location != NSNotFound);
+    
+    // Records text for undo for every new word
+    if (self.newWordInserted) {
+        [self.textView prepareForUndo:@"Word Change"];
+    }
+    
     if ([text isEqualToString:@"\n"]) {
         //Detected break. Should insert new line break manually.
         [textView slk_insertNewLineBreak];
@@ -592,7 +612,12 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
     [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextViewTextDidChangeNotification object:nil];
     [[NSNotificationCenter defaultCenter] removeObserver:self name:SLKTextViewContentSizeDidChangeNotification object:nil];
     
-    [_leftButton.imageView removeObserver:self forKeyPath:NSStringFromSelector(@selector(image))];
+    @try {
+        [_leftButton.imageView removeObserver:self forKeyPath:NSStringFromSelector(@selector(image))];
+    }
+    @catch(id anException) {
+        //do nothing, obviously it wasn't attached because an exception was thrown
+    }
     
     _leftButton = nil;
     _rightButton = nil;
@@ -628,13 +653,34 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
     }
 }
 
-- (void)willMoveToSuperview:(UIView *)newSuperview
+- (void)addKeyPathObserverToView:(UIView *)superview
 {
-    if (self.superview) {
-        [self.superview removeObserver:self forKeyPath:[self keyPathForKeyboardHandling]];
+    [self removeKeyPathObserver];
+    
+    if (!superview) {
+        return;
     }
     
-    [newSuperview addObserver:self forKeyPath:[self keyPathForKeyboardHandling] options:0 context:NULL];
+    [superview addObserver:self forKeyPath:[self keyPathForKeyboardHandling] options:0 context:NULL];
+}
+
+- (void)removeKeyPathObserver
+{
+    if (!self.superview) {
+        return;
+    }
+    
+    @try {
+        [self.superview removeObserver:self forKeyPath:[self keyPathForKeyboardHandling]];
+    }
+    @catch(id anException) {
+        //do nothing, obviously it wasn't attached because an exception was thrown
+    }
+}
+
+- (void)willMoveToSuperview:(UIView *)newSuperview
+{
+    [self addKeyPathObserverToView:newSuperview];
     
     [super willMoveToSuperview:newSuperview];
 }
@@ -650,9 +696,7 @@ NSString * const SCKInputAccessoryViewKeyboardFrameDidChangeNotification = @"com
 
 - (void)dealloc
 {
-    if (self.superview) {
-        [self.superview removeObserver:self forKeyPath:[self keyPathForKeyboardHandling]];
-    }
+    [self removeKeyPathObserver];
 }
 
 @end

@@ -76,7 +76,7 @@
     }
     
     //Detected break. Should scroll to bottom if needed.
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0025 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.0125 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         [self slk_scrollToBottomAnimated:animated];
     });
 }
@@ -93,6 +93,9 @@
     if (text.length == 0) {
         return NSMakeRange(0, 0);
     }
+    
+    // Registers for undo management
+    [self prepareForUndo:@"Text appending"];
     
     // Append the new string at the caret position
     if (range.length == 0)
@@ -162,6 +165,12 @@
     }
 
     return word;
+}
+
+- (void)prepareForUndo:(NSString *)description
+{
+    [[self.undoManager prepareWithInvocationTarget:self] setText:self.text];
+    [self.undoManager setActionName:description];
 }
 
 @end
