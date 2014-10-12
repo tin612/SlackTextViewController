@@ -904,7 +904,7 @@
     
     // Skips this if it's not the expected textView.
     // Checking the keyboard height constant helps to disable the view constraints update on iPad when the keyboard is undocked.
-    if (![self.textView isFirstResponder] || self.keyboardHC.constant == 0) {
+    if (![self.textView isFirstResponder] || (self.keyboardHC.constant == 0 && self.keyboardStatus == SLKKeyboardStatusDidHide)) {
         return;
     }
     
