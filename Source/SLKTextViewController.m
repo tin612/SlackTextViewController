@@ -380,7 +380,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     return _textInputbar.leftButton;
 }
 
-- (UIButton *)rightButton
+- (SLKIncreasedTouchAreaButton *)rightButton
 {
     return _textInputbar.rightButton;
 }
